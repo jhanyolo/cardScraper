@@ -4,6 +4,7 @@ import os.path
 from bs4 import BeautifulSoup, SoupStrainer
 import requests
 
+CONST_EXCHANGE_RATE = 80  # SGD/JPY
 CONST_NO_RARITY = 'nr'
 CONST_ULTRA_GOLDEN = 'ug'
 CONST_CARD_RANK = 'a'
@@ -45,7 +46,7 @@ def get_dmwiki_dict_list(dmwiki_link):
 		dmwiki_card = {'code': '', 'card_link': ''}
 
 		# replace unicode nbsp(\xa0) with space, and split to get card code
-		dmwiki_card['code'] = i.getText().replace(u'\xa0', u' ').split(' ')[0]
+		dmwiki_card['code'] = i.getText().replace('\xa0', ' ').split(' ')[0]
 		dmwiki_card['code'] = dmwiki_card['code'].lower()
 
 		dmwiki_card['card_link'] = 'https://duelmasters.fandom.com' + i.find('a')['href']
@@ -80,8 +81,9 @@ def get_fullahead_dict_list(booster_name):
 		for card_div in card_list:
 			card_title = card_div.find('span', class_='itenName').getText()
 
-			# get fullahead info of non-damaged cards
-			if 'キズ格安' not in card_title:
+			# get fullahead info of desired cards
+			# キズ格安 = damaged , 宅配便のみ = local courier(mostly non-cards)
+			if 'キズ格安' not in card_title and '宅配便のみ' not in card_title:
 				fullahead_dict = get_fullahead_dict(card_title, booster_name, card_div)
 				fullahead_dict_list.append(fullahead_dict)
 
@@ -92,27 +94,34 @@ def get_fullahead_dict_list(booster_name):
 
 def get_fullahead_dict(card_title, booster_name, card_div):
 	fullahead_dict = {	'code': '',
-								'jap_name': '',
-								'image': '',
-								'price': ''}
+						'jap_name': '',
+						'image': '',
+						'price': ''}
 
-	# get card code and jap name
-	if len(card_title.split(booster_name)) == 1:
-		code = card_title.split(booster_name)[0][1:]
+	# dmbd formatting different in fullahead
+	# truncate from 'dmbd' to 'bd'
+	booster_split = booster_name
+	if 'DMBD' in booster_name:
+		booster_split = booster_split[2:]
+
+	# get jap name
+	if len(card_title.split(booster_split)) == 1:
+		code = card_title.split(booster_split)[0][1:]
 	else:
-		code = card_title.split(booster_name)[1][1:]
+		code = card_title.split(booster_split)[1][1:]
 
 	temp = ''
-	for a in range(len(code)):
-		if is_english(code[a]) or code[a] == '/' or code[a] == '秘':
-			temp += code[a]
+	for i in range(len(code)):
+		if is_english(code[i]) or code[i] == '/' or code[i] == '秘':
+			temp += code[i]
 
 			if temp.count('/') == 2:
 				break
 		else:
 			break
 
-	# use temp string to split the fullahead_name and get jap_name
+	# temp = characters before jap name
+	# remove all characters before jap name in card_title
 	jap_name = card_title.split(temp)[1]
 
 	if jap_name.count('/') > 0 and is_english(jap_name.split('/')[0]):
@@ -120,7 +129,7 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 
 	fullahead_dict['jap_name'] = jap_name
 
-	# continue getting card code
+	# get card code
 	code = temp[:-1].replace('/', '-')
 
 	# format secret card code
@@ -142,32 +151,34 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 	# get image
 	fullahead_dict['image'] = card_div.find('span', class_='itemImg').find('img')['src']
 
-	# find rarity & get price
-	rarity = fullahead_dict['code'].rsplit('-', 1)[1]
+	# get price
+	price = card_div.find('span', class_='itemPrice').find('strong').getText()
+	price = price.split('円')[0]
 
-	if rarity.upper() == 'C':
-		price = 0.3
-	elif rarity.upper() == 'U':
-		price = 0.5
-	elif rarity.upper() == 'R':
-		price = 1
+	if ',' in price:
+		price = price.replace(',', '')
+
+	price = int(price)
+
+	if price < CONST_EXCHANGE_RATE:
+		rarity = fullahead_dict['code'].rsplit('-', 1)[1]
+		price = round(price / 80, 1)
+
+		if rarity.upper() == 'C':
+			price = max(price, 0.3)
+		elif rarity.upper() == 'U':
+			price = max(price, 0.5)
+		else:
+			price = 1
 	else:
-		price = card_div.find('span', class_='itemPrice').find('strong').getText()
-		price = price.split('円')[0]
-
-		if ',' in price:
-			price = price.replace(',', '')
-
-		price = round(int(price) / 80)
-
-		if price == 0:
-			price = 0.3
+		price = round(price / CONST_EXCHANGE_RATE)
 
 	fullahead_dict['price'] = price
 
 	return fullahead_dict
 
 
+# check if can be encoded with ASCII, which are Latin alphabet and some other characters
 # -*- coding: utf-8 -*-
 def is_english(s):
 	try:
@@ -176,28 +187,6 @@ def is_english(s):
 		return False
 	else:
 		return True
-
-
-# get string till delimiter (excluding)
-def get_str_till_delimiter(string, delimiter):
-	result = ''
-	for s in string:
-		if s == delimiter:
-			break
-
-		result += s
-
-	return result
-
-
-def compare_wiki_fullahead(dmwiki_card, fullahead_card):
-	dmwiki_code = dmwiki_card.split('/')[0]
-	fullahead_code = fullahead_card.split('-', 3)[2]
-
-	if dmwiki_code == fullahead_code:
-		return True
-	else:
-		return False
 
 
 # get card name, bodyhtml and image link
@@ -243,7 +232,7 @@ def get_product_dict(card_handle, english_name, body_html, booster_name, fullahe
 
 
 def get_title(card_handle, english_name):
-	# dmrp-09-m3-mas-m3a
+	# card-format: dmrp-09-m3-mas-m3a
 	card_handle_split_list = card_handle.split('-')
 
 	card_title = 'Duel Masters - '
@@ -260,6 +249,17 @@ def get_title(card_handle, english_name):
 		card_title += '[Rank:A]'
 
 	return card_title
+
+
+# compares card number of of dmwiki['code'] and fullahead ['code']
+def compare_wiki_fullahead(dmwiki_card, fullahead_card):
+	dmwiki_code = dmwiki_card.split('/')[0]
+	fullahead_code = fullahead_card.split('-', 3)[2]
+
+	if dmwiki_code == fullahead_code:
+		return True
+	else:
+		return False
 
 
 def load_data(dmwiki_dict_list, fullahead_dict_list, booster_name):
@@ -336,10 +336,9 @@ def save_data(booster_name):
 		for i in data_list:
 			writer.writerow(i)
 
+		print('CSV file created!')
+		print()
 		csvfile.close()
-
-	print('CSV file created!')
-	print()
 
 
 def write_image_dl_error_file():
