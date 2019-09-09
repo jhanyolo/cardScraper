@@ -1,5 +1,4 @@
 # cardScraper
----
 Python Web Scraper to retrieve desired card details and image file for Duel Masters TCG in CSV to import to Shopify store.
 
 **Main card details scraped**
