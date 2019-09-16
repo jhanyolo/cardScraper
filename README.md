@@ -5,7 +5,6 @@ Python Web Scraper to retrieve desired card details and image file for Duel Mast
   * Price
   * Formatted card code
   * Japanese and English card name
-  * Card Description
   * Card Images
   
 **Websites scraped**
