@@ -13,7 +13,5 @@ Python Web Scraper to retrieve desired card details and image file for Duel Mast
   * https://duelmasters.fandom.com/wiki/Duel_Masters_Wiki
   
 ---
-**Current Limitations**
+**Limitations**
   * Can only scrape card sets from 'Recent and Upcoming Sets' section on DM wiki
-  
-  Based on user needs, only new sets need to be scraped.
