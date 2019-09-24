@@ -9,6 +9,7 @@ CONST_NO_RARITY = 'nr'
 CONST_ULTRA_GOLDEN = 'ug'
 CONST_CARD_RANK = 'a'
 CONST_SECRET = 's'
+CONST_SECRET_RARE = 'ser'
 CONST_FULLAHEAD_SECRET = 'ss'
 image_error_list = []
 data_list = []		# stores data to write to csv file
@@ -21,16 +22,17 @@ def get_booster_url(booster_name):
 	strainer = SoupStrainer('div', class_='lightbox-caption')
 	soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
 
+	# check if card sets in 'Recent and Upcoming Sets' matches user's desired card set
 	booster_list = soup.find_all('a')
-
 	for i in booster_list:
-		if booster_name == i['title'][0:len(booster_name)]:
+		# return link if booster exists
+		if booster_name == i['title'][:len(booster_name)]:
 			return 'https://duelmasters.fandom.com' + i['href']
 
 	return False
 
 
-# get card code
+# get card code and link to card from dmwiki
 def get_dmwiki_dict_list(dmwiki_link):
 	result = requests.get(dmwiki_link, timeout=5)
 
@@ -112,7 +114,7 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 
 	temp = ''
 	for i in range(len(code)):
-		if is_english(code[i]) or code[i] == '/' or code[i] == '秘':
+		if is_english(code[i]) or code[i] == '/' or code[i] == '秘' or code[i] == '超':
 			temp += code[i]
 
 			if temp.count('/') == 2:
@@ -138,6 +140,8 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 
 		if code[-2:] == CONST_FULLAHEAD_SECRET:
 			code = code[:-3]
+	if '超' in code:
+		code = code.replace('超', CONST_SECRET_RARE, 1)
 
 	# format ultra golden card and no rarity
 	if code[0].upper() == 'G':
@@ -162,7 +166,7 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 
 	if price < CONST_EXCHANGE_RATE:
 		rarity = fullahead_dict['code'].rsplit('-', 1)[1]
-		price = round(price / 80, 1)
+		price = round(price / CONST_EXCHANGE_RATE, 1)
 
 		if rarity.upper() == 'C':
 			price = max(price, 0.3)
@@ -242,8 +246,9 @@ def get_title(card_handle, english_name):
 	card_title += card_handle_split_list[2].upper() + '/' + card_handle_split_list[4][:-1].upper() + ' '
 	card_title += english_name + ' '
 
+	# adds (secret) to secret cards and card rank to all cards
 	rarity = card_handle_split_list[3]
-	if rarity == 's':
+	if rarity == CONST_SECRET:
 		card_title += '(Secret) [Rank:A]'
 	else:
 		card_title += '[Rank:A]'
