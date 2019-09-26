@@ -4,6 +4,7 @@ import os.path
 from bs4 import BeautifulSoup, SoupStrainer
 import requests
 
+
 CONST_EXCHANGE_RATE = 80  # SGD/JPY
 CONST_NO_RARITY = 'nr'
 CONST_ULTRA_GOLDEN = 'ug'
@@ -12,6 +13,7 @@ CONST_SECRET = 's'
 CONST_SECRET_RARE = 'ser'
 CONST_FULLAHEAD_SECRET = 'ss'
 image_error_list = []
+unloaded_cards_error_list = []
 fieldnames = ['Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Option3 Name', 'Option3 Value', 'Variant SKU', 'Variant Grams', 'Variant Inventory Tracker', 'Variant Inventory Policy', 'Variant Fulfillment Service', 'Variant Price', 'Variant Compare At Price', 'Variant Requires Shipping', 'Variant Taxable', 'Variant Barcode', 'Image Src', 'Image Position', 'Image Alt Text', 'Gift Card', 'SEO Title', 'SEO Description', 'Google Shopping / Google Product Category', 'Google Shopping / Gender', 'Google Shopping / Age Group', 'Google Shopping / MPN', 'Google Shopping / AdWords Grouping', 'Google Shopping / AdWords Labels', 'Google Shopping / Condition', 'Google Shopping / Custom Product', 'Google Shopping / Custom Label 0', 'Google Shopping / Custom Label 1', 'Google Shopping / Custom Label 2', 'Google Shopping / Custom Label 3', 'Google Shopping / Custom Label 4', 'Variant Image', 'Variant Weight Unit', 'Variant Tax Code', 'Cost per item']
 
 
@@ -138,6 +140,7 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 	if '秘' in code:
 		code = code.replace('秘', CONST_SECRET, 1)
 
+		# remove 'SS' from secret cards
 		if code[-2:] == CONST_FULLAHEAD_SECRET:
 			code = code[:-3]
 	if '超' in code:
@@ -193,7 +196,8 @@ def is_english(s):
 		return True
 
 
-# return product in dictionary form
+# used in load_data() to return product dictionary to be added to csv file
+# arguments should ONLY contain matching FA and dmwiki cards
 def get_product_dict(full_dict, dmwiki_dict, booster_name):
 	product_dict = {}
 
@@ -236,9 +240,9 @@ def get_title(card_handle, english_name):
 	# adds (secret) to secret cards and card rank to all cards
 	rarity = card_handle_split_list[3]
 	if rarity == CONST_SECRET:
-		card_title += '(Secret) [Rank:A]'
+		card_title += ' (Secret) [Rank:A]'
 	else:
-		card_title += '[Rank:A]'
+		card_title += ' [Rank:A]'
 
 	return card_title
 
@@ -251,6 +255,7 @@ def compare_wiki_fullahead(dmwiki_card, fullahead_card):
 	return dmwiki_code == fullahead_code
 
 
+# combine information from fullahead and dmwiki for each card, format the data and add to data_list
 def load_data(dmwiki_dict_list, fullahead_dict_list, booster_name):
 	data_list = []
 	print('Loading products from {0}.'.format(booster_name))
@@ -258,13 +263,19 @@ def load_data(dmwiki_dict_list, fullahead_dict_list, booster_name):
 	total = len(fullahead_dict_list)
 
 	for full in fullahead_dict_list:
+		# checks if card is added to data_list
+		check_if_added = False
 		for dmwiki in dmwiki_dict_list:
 			if compare_wiki_fullahead(dmwiki['code'], full['code']):
 				product_dict = get_product_dict(full, dmwiki, booster_name)
 				data_list.append(product_dict)
 				counter += 1
+				check_if_added = True
 				print('Loading: {0}/{1}'.format(counter, total), end='\r')
 				break
+		# add to error_list if card is added
+		if not check_if_added:
+			unloaded_cards_error_list.append(full)
 	print()
 	return data_list
 
@@ -328,14 +339,25 @@ def save_data(booster_name, data_list):
 		csvfile.close()
 
 
-def write_image_dl_error_file():
-	if len(image_error_list) > 0:
+# outputs cards info that have image downloading errors
+# or that they are not loaded into data_list to be written to CSV file
+def write_error_files(booster_name):
+	if image_error_list:
+		text_file_name = booster_name + 'imageErrors.txt'
 		print('Image download is incomplete, creating error txt file...')
-		with open('imageErrors.txt', 'w') as file:
+		with open(text_file_name, 'w') as file:
 			for i in image_error_list:
 				file.write(i + '\n')
 			file.close()
-			print('imageErrors.txt created!')
+			print(text_file_name + ' created!')
+	if unloaded_cards_error_list:
+		text_file_name = booster_name + 'cardErrors.txt'
+		print('Loading of cards is incomplete, creating error txt file...')
+		with open(text_file_name, 'w') as file:
+			for i in unloaded_cards_error_list:
+				file.write(i['code'] + '\n')
+			file.close()
+			print(text_file_name + ' created!')
 
 
 def main():
@@ -353,7 +375,7 @@ def main():
 			# download images and output error log file if any
 			make_directory(booster_name)
 			download_images(fullahead_dict_list, booster_name)
-			write_image_dl_error_file()
+			write_error_files(booster_name)
 			break
 		else:
 			print(booster_name + " cannot be found.")
