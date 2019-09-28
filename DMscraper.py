@@ -6,19 +6,21 @@ import requests
 
 
 CONST_EXCHANGE_RATE = 80  # SGD/JPY
-CONST_NO_RARITY = 'nr'
-CONST_ULTRA_GOLDEN = 'ug'
 CONST_CARD_RANK = 'a'
-CONST_SECRET = 's'
-CONST_SECRET_RARE = 'ser'
-CONST_FULLAHEAD_SECRET = 'ss'
+CONST_FULLAHEAD_SECRET = ['秘', 'SS']
 image_error_list = []
 unloaded_cards_error_list = []
-fieldnames = ['Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Option3 Name', 'Option3 Value', 'Variant SKU', 'Variant Grams', 'Variant Inventory Tracker', 'Variant Inventory Policy', 'Variant Fulfillment Service', 'Variant Price', 'Variant Compare At Price', 'Variant Requires Shipping', 'Variant Taxable', 'Variant Barcode', 'Image Src', 'Image Position', 'Image Alt Text', 'Gift Card', 'SEO Title', 'SEO Description', 'Google Shopping / Google Product Category', 'Google Shopping / Gender', 'Google Shopping / Age Group', 'Google Shopping / MPN', 'Google Shopping / AdWords Grouping', 'Google Shopping / AdWords Labels', 'Google Shopping / Condition', 'Google Shopping / Custom Product', 'Google Shopping / Custom Label 0', 'Google Shopping / Custom Label 1', 'Google Shopping / Custom Label 2', 'Google Shopping / Custom Label 3', 'Google Shopping / Custom Label 4', 'Variant Image', 'Variant Weight Unit', 'Variant Tax Code', 'Cost per item']
+
+
+# add User-agent to urlib headers to bypass bot detection
+def add_headers_to_urllib():
+	opener = urllib.request.build_opener()
+	opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+	urllib.request.install_opener(opener)
 
 
 # return booster url based on user input
-def get_booster_url(booster_name):
+def get_dmwiki_booster_url(booster_name):
 	result = requests.get('https://duelmasters.fandom.com/wiki/Duel_Masters_Wiki', timeout=5)
 	strainer = SoupStrainer('div', class_='lightbox-caption')
 	soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
@@ -29,7 +31,8 @@ def get_booster_url(booster_name):
 		# return link if booster exists
 		if booster_name == i['title'][:len(booster_name)]:
 			return 'https://duelmasters.fandom.com' + i['href']
-
+	print('Booster not found on DM wiki')
+	print()
 	return False
 
 
@@ -51,53 +54,84 @@ def get_dmwiki_dict_list(dmwiki_link):
 
 		# replace unicode nbsp(\xa0) with space, and split to get card code
 		dmwiki_card['code'] = i.getText().replace('\xa0', ' ').split(' ')[0]
-		dmwiki_card['code'] = dmwiki_card['code'].lower()
+		dmwiki_card['code'] = dmwiki_card['code'].split('/')[0].upper()
 
 		dmwiki_card['english_name'] = i.find('a')['title']
 		dmwiki_dict_list.append(dmwiki_card)
 
+	print('DM wiki information loaded!')
+	print()
 	return dmwiki_dict_list
 
 
+# return booster url based on user input (if it exists)
+def get_fullahead_booster_url(booster_name):
+	try:
+		result = requests.get('https://fullahead-dm.com/?mode=srh&cid=&keyword=', timeout=5)
+	except requests.exceptions.RequestException as e:
+		print(e)
+	strainer = SoupStrainer('div', class_='categoryBox')
+	soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
+
+	# check if card sets in FA sidebar
+	booster_list = soup.find_all('a')
+	for i in booster_list:
+		# return link if booster exists
+		if i.get_text() == booster_name:
+			return i.attrs['href']
+	return False
+
+
 # retrieve card code, jap_name, imagelink
-def get_fullahead_dict_list(booster_name):
-	# get total number of pages
+def get_fullahead_dict_list(booster_url, booster_name):
+	print('Retrieving products from Fullahead...')
+
+	# get total number of pages by finding total number of cards
+	# each page has 100 cards maximum
 	counter = 1
-	htmllink = 'https://fullahead-dm.com/?mode=srh&cid=&keyword=' + booster_name + '&sort=n&page='
-	result = requests.get(htmllink + str(counter), timeout=5)
+	htmllink = 'https://fullahead-dm.com' + booster_url + '&sort=n&page='
+	try:
+		result = requests.get(htmllink + str(counter), timeout=5)
+	except requests.exceptions.RequestException as e:
+		print(e)
 	strainer = SoupStrainer('span', class_='pagerTxt')
 	soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
 
-	total_items = int(soup.find('strong').getText()[1:-1])
+	total_items = int(soup.find('strong').get_text()[1:-1])
 	pages = total_items // 101 + 1
 	fullahead_dict_list = []
 
 	# load all cards returned from the search
+	card_counter = 0
 	while counter != pages + 1:
 		if counter != 1:
 			result = requests.get(htmllink + str(counter), timeout=5)
 
-		strainer = SoupStrainer('div', class_='indexItemBox')
-		soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
+		soup = BeautifulSoup(result.content, 'lxml')
 		card_list = soup.find('div', class_='indexItemBox').find_all('div')
 
 		# get necessary card info in fullahead_dict and add to list
 		for card_div in card_list:
-			card_title = card_div.find('span', class_='itenName').getText()
+			card_url = card_div.find('a').attrs['href']
+			card_title = card_div.find('span', class_='itenName').get_text()
+			price_jpy = card_div.find('span', class_='itemPrice').find('strong').getText()
 
 			# get fullahead info of desired cards
 			# キズ格安 = damaged , 宅配便のみ = local courier(mostly non-cards)
 			if 'キズ格安' not in card_title and '宅配便のみ' not in card_title:
-				fullahead_dict = get_fullahead_dict(card_title, booster_name, card_div)
+				fullahead_dict = get_fullahead_dict(card_url, card_title, booster_name, price_jpy)
 				fullahead_dict_list.append(fullahead_dict)
-
+				card_counter += 1
+				print('Loading: {0}/{1}'.format(card_counter, total_items), end='\r')
 		counter += 1
 
 	return fullahead_dict_list
 
 
-def get_fullahead_dict(card_title, booster_name, card_div):
-	fullahead_dict = {	'code': '',
+def get_fullahead_dict(card_url, card_title, booster_name, price_jpy):
+	fullahead_dict = {	'handle': '',
+						'code': '',
+						'rarity': '',
 						'jap_name': '',
 						'image': '',
 						'price': ''}
@@ -108,67 +142,27 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 	if 'DMBD' in booster_name:
 		booster_split = booster_split[2:]
 
-	# get jap name
-	if len(card_title.split(booster_split)) == 1:
-		code = card_title.split(booster_split)[0][1:]
+	# get code by splitting card title with booster name
+	# code will be the next information after booster name in card_title (e.g. DMRP-10/G7/)
+	temp = card_title.split(booster_split)
+	if len(temp) == 1:
+		remaining_info = temp[0][1:]
 	else:
-		code = card_title.split(booster_split)[1][1:]
-
-	temp = ''
-	for i in range(len(code)):
-		if is_english(code[i]) or code[i] == '/' or code[i] == '秘' or code[i] == '超':
-			temp += code[i]
-
-			if temp.count('/') == 2:
-				break
-		else:
-			break
-
-	# temp = characters before jap name
-	# remove all characters before jap name in card_title
-	jap_name = card_title.split(temp)[1]
-
-	if jap_name.count('/') > 0 and is_english(jap_name.split('/')[0]):
-		jap_name = jap_name.split('/')[1]
-
-	fullahead_dict['jap_name'] = jap_name
-
-	# get card code
-	code = temp[:-1].replace('/', '-')
-
-	# format secret card code
-	if '秘' in code:
-		code = code.replace('秘', CONST_SECRET, 1)
-
-		# remove 'SS' from secret cards
-		if code[-2:] == CONST_FULLAHEAD_SECRET:
-			code = code[:-3]
-	if '超' in code:
-		code = code.replace('超', CONST_SECRET_RARE, 1)
-
-	# format ultra golden card and no rarity
-	if code[0].upper() == 'G':
-		code += ('-' + CONST_ULTRA_GOLDEN)
-	elif code.count('-') == 0:  # no rarity at end of string:
-		code += ('-' + CONST_NO_RARITY)
-
-	code = (booster_name + '-' + code).lower()
+		remaining_info = temp[1][1:]
+	code = remaining_info.split('/', 1)[0]
 	fullahead_dict['code'] = code
 
-	# get image
-	fullahead_dict['image'] = card_div.find('span', class_='itemImg').find('img')['src']
+	# get rarity for card
+	rarity = remaining_info.split('/', 3)[1]
+	fullahead_dict['rarity'] = rarity
 
-	# get price
-	price = card_div.find('span', class_='itemPrice').find('strong').getText()
-	price = price.split('円')[0]
-
+	# get price by converting JPY to SGD
+	price = price_jpy.split('円')[0]
 	if ',' in price:
 		price = price.replace(',', '')
-
 	price = int(price)
 
 	if price < CONST_EXCHANGE_RATE:
-		rarity = fullahead_dict['code'].rsplit('-', 1)[1]
 		price = round(price / CONST_EXCHANGE_RATE, 1)
 
 		if rarity.upper() == 'C':
@@ -181,6 +175,40 @@ def get_fullahead_dict(card_title, booster_name, card_div):
 		price = round(price / CONST_EXCHANGE_RATE)
 
 	fullahead_dict['price'] = price
+
+	# get jap name by storing all characters before the jap name in 'temp' string
+	# and split the string using 'temp'
+	temp = ''
+	for i in range(len(remaining_info)):
+		if is_english(remaining_info[i]) or remaining_info[i] == '/' or remaining_info[i] == '秘' or remaining_info[i] == '超':
+			temp += remaining_info[i]
+
+			if temp.count('/') == 2:
+				break
+		else:
+			break
+	jap_name = card_title.split(temp)[1]
+
+	if jap_name.count('/') > 0 and is_english(jap_name.split('/')[0]):
+		jap_name = jap_name.split('/')[1]
+
+	fullahead_dict['jap_name'] = jap_name
+
+	# get FA handle name and price from individual card page
+	try:
+		result = requests.get('https://fullahead-dm.com' + card_url, timeout=5)
+	except requests.exceptions.RequestException as e:
+		print(e)
+	strainer = SoupStrainer('div', class_='product_detail_area cf')
+	soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
+
+	# get image
+	image_list = soup.find_all('img', class_={'zoom-tiny-image'})
+	fullahead_dict['image'] = image_list[0].attrs['src']
+
+	# get handle name
+	card_table_details = soup.find_all('td')
+	fullahead_dict['handle'] = card_table_details[0].get_text()
 
 	return fullahead_dict
 
@@ -196,17 +224,38 @@ def is_english(s):
 		return True
 
 
+# combine information from fullahead and dmwiki for each card, format the data and add to data_list
+def load_data(dmwiki_dict_list, fullahead_dict_list, booster_name):
+	data_list = []
+	print('Processing products from {0}.'.format(booster_name))
+	counter = 0
+	total = len(fullahead_dict_list)
+
+	for full in fullahead_dict_list:
+		# checks if card is added to data_list
+		check_if_added = False
+		for dmwiki in dmwiki_dict_list:
+			if dmwiki['code'] == full['code']:
+				product_dict = get_product_dict(full, dmwiki, booster_name)
+				data_list.append(product_dict)
+				counter += 1
+				check_if_added = True
+				print('Loading: {0}/{1}'.format(counter, total), end='\r')
+				break
+		# add to error_list if card is added
+		if not check_if_added:
+			unloaded_cards_error_list.append(full)
+	print()
+	return data_list
+
+
 # used in load_data() to return product dictionary to be added to csv file
 # arguments should ONLY contain matching FA and dmwiki cards
 def get_product_dict(full_dict, dmwiki_dict, booster_name):
 	product_dict = {}
-
-	for i in fieldnames:
-		product_dict[i] = ''
-
-	product_dict['Handle'] = full_dict['code'] + '-' + dmwiki_dict['code'].split('/')[1] + CONST_CARD_RANK
-	product_dict['Title'] = get_title(product_dict['Handle'], dmwiki_dict['english_name'])
-	product_dict['Body (HTML)'] = '<p>Title:' + dmwiki_dict['english_name'] + '[' + full_dict['jap_name'] + ']</p><p>Game: Duel Masters</p><p>Condition: Rank A - Mint / near mint condition, no visible damage, bent, or crease but may have few white spots on edges</p>'
+	product_dict['Handle'] = full_dict['handle'] + CONST_CARD_RANK
+	product_dict['Title'] = get_title(full_dict, dmwiki_dict['english_name'], booster_name)
+	product_dict['Body (HTML)'] = '<p>Title: {0} [{1}]</p><p>Game: Duel Masters</p><p>Condition: Rank A - Mint / near mint condition, no visible damage, bent, or crease but may have few white spots on edges</p>'.format(dmwiki_dict['english_name'], full_dict['jap_name'])
 	product_dict['Vendor'] = 'Cardboard Collectible'
 	product_dict['Tags'] = booster_name.split('-', 1)[0] + ', ' + booster_name + ', Duel Masters'
 	product_dict['Published'] = 'True'
@@ -227,19 +276,13 @@ def get_product_dict(full_dict, dmwiki_dict, booster_name):
 
 
 # format card_title to be used in get_product_title
-def get_title(card_handle, english_name):
-	# card-format: dmrp-09-m3-mas-m3a
-	card_handle_split_list = card_handle.split('-')
-
+def get_title(full_dict, english_name, booster_name):
 	# format card_title
 	# add booster name(dmrp10), card serial num(g1/g7) and english name sequentially
-	card_title = ''.join(card_handle_split_list[:2]) + ' '
-	card_title += card_handle_split_list[2] + '/' + card_handle_split_list[4][:-1] + ' '
-	card_title = 'Duel Masters - ' + card_title.upper() + english_name
+	card_title = 'Duel Masters - {0}/{1} {2}'.format(booster_name.upper(), full_dict['code'], english_name)
 
 	# adds (secret) to secret cards and card rank to all cards
-	rarity = card_handle_split_list[3]
-	if rarity == CONST_SECRET:
+	if full_dict['rarity'] in CONST_FULLAHEAD_SECRET:
 		card_title += ' (Secret) [Rank:A]'
 	else:
 		card_title += ' [Rank:A]'
@@ -247,42 +290,19 @@ def get_title(card_handle, english_name):
 	return card_title
 
 
-# compares card number of of dmwiki['code'] and fullahead ['code']
-def compare_wiki_fullahead(dmwiki_card, fullahead_card):
-	dmwiki_code = dmwiki_card.split('/')[0]
-	fullahead_code = fullahead_card.split('-', 3)[2]
+# save data as csv
+def save_data(booster_name, data_list):
+	filepath = booster_name + '.csv'
+	fieldnames = ['Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Option3 Name', 'Option3 Value', 'Variant SKU', 'Variant Grams', 'Variant Inventory Tracker', 'Variant Inventory Policy', 'Variant Fulfillment Service', 'Variant Price', 'Variant Compare At Price', 'Variant Requires Shipping', 'Variant Taxable', 'Variant Barcode', 'Image Src', 'Image Position', 'Image Alt Text', 'Gift Card', 'SEO Title', 'SEO Description', 'Google Shopping / Google Product Category', 'Google Shopping / Gender', 'Google Shopping / Age Group', 'Google Shopping / MPN', 'Google Shopping / AdWords Grouping', 'Google Shopping / AdWords Labels', 'Google Shopping / Condition', 'Google Shopping / Custom Product', 'Google Shopping / Custom Label 0', 'Google Shopping / Custom Label 1', 'Google Shopping / Custom Label 2', 'Google Shopping / Custom Label 3', 'Google Shopping / Custom Label 4', 'Variant Image', 'Variant Weight Unit', 'Variant Tax Code', 'Cost per item']
+	with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+		writer.writeheader()
 
-	return dmwiki_code == fullahead_code
+		for i in data_list:
+			writer.writerow(i)
 
-
-# combine information from fullahead and dmwiki for each card, format the data and add to data_list
-def load_data(dmwiki_dict_list, fullahead_dict_list, booster_name):
-	data_list = []
-	print('Loading products from {0}.'.format(booster_name))
-	counter = 0
-	total = len(fullahead_dict_list)
-
-	for full in fullahead_dict_list:
-		# checks if card is added to data_list
-		check_if_added = False
-		for dmwiki in dmwiki_dict_list:
-			if compare_wiki_fullahead(dmwiki['code'], full['code']):
-				product_dict = get_product_dict(full, dmwiki, booster_name)
-				data_list.append(product_dict)
-				counter += 1
-				check_if_added = True
-				print('Loading: {0}/{1}'.format(counter, total), end='\r')
-				break
-		# add to error_list if card is added
-		if not check_if_added:
-			unloaded_cards_error_list.append(full)
-	print()
-	return data_list
-
-
-# check if card is secret from fullahead_dict
-def is_secret(product_title):
-	return 'Secret' in product_title
+		print('CSV file created!')
+		print()
 
 
 def make_directory(booster_name):
@@ -324,21 +344,6 @@ def download_images(fullahead_dict_list, booster_name):
 		print('Not all images are downloaded (some images may not exist on fullahead)')
 
 
-# save data as csv
-def save_data(booster_name, data_list):
-	filepath = booster_name + '.csv'
-	with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
-		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-		writer.writeheader()
-
-		for i in data_list:
-			writer.writerow(i)
-
-		print('CSV file created!')
-		print()
-		csvfile.close()
-
-
 # outputs cards info that have image downloading errors
 # or that they are not loaded into data_list to be written to CSV file
 def write_error_files(booster_name):
@@ -348,7 +353,6 @@ def write_error_files(booster_name):
 		with open(text_file_name, 'w') as file:
 			for i in image_error_list:
 				file.write(i + '\n')
-			file.close()
 			print(text_file_name + ' created!')
 	if unloaded_cards_error_list:
 		text_file_name = booster_name + 'cardErrors.txt'
@@ -356,26 +360,29 @@ def write_error_files(booster_name):
 		with open(text_file_name, 'w') as file:
 			for i in unloaded_cards_error_list:
 				file.write(i['code'] + '\n')
-			file.close()
 			print(text_file_name + ' created!')
 
 
 def main():
+	add_headers_to_urllib()
 	booster_name = input('Enter booster pack name (eg. dmrp-10) or press q to quit: ').upper()
 	while(booster_name != 'q'):
-		if get_booster_url(booster_name):
-			# retrieve info from bigweb, BS wiki and FullAhead
-			fullahead_dict_list = get_fullahead_dict_list(booster_name)
-			dmwiki_dict_list = get_dmwiki_dict_list(get_booster_url(booster_name))
+		dmwiki_link = get_dmwiki_booster_url(booster_name)
+		if dmwiki_link:
+			dmwiki_dict_list = get_dmwiki_dict_list(dmwiki_link)
+			fa_booster_url = get_fullahead_booster_url(booster_name)
 
-			# load all cards info into data_list and save to csv file
-			data_list = load_data(dmwiki_dict_list, fullahead_dict_list, booster_name)
-			save_data(booster_name, data_list)
-
-			# download images and output error log file if any
-			make_directory(booster_name)
-			download_images(fullahead_dict_list, booster_name)
-			write_error_files(booster_name)
+			if fa_booster_url:
+				fullahead_dict_list = get_fullahead_dict_list(fa_booster_url, booster_name)
+				data_list = load_data(dmwiki_dict_list, fullahead_dict_list, booster_name)
+				save_data(booster_name, data_list)
+				make_directory(booster_name)
+				download_images(fullahead_dict_list, booster_name)
+				write_error_files(booster_name)
+			else:
+				print('Booster not found on Fullahead')
+				print('Ending program...')
+				print()
 			break
 		else:
 			print(booster_name + " cannot be found.")
