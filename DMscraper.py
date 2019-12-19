@@ -78,7 +78,12 @@ def get_fullahead_booster_url(booster_name):
 	for i in booster_list:
 		# return link if booster exists
 		if i.get_text() == booster_name:
-			return i.attrs['href']
+			booster_url = i.attrs['href']
+
+			# some urls are incomplete
+			if 'https://fullahead-dm.com' not in booster_url:
+				booster_url = 'https://fullahead-dm.com' + booster_url
+			return booster_url
 	return False
 
 
@@ -89,7 +94,7 @@ def get_fullahead_dict_list(booster_url, booster_name):
 	# get total number of pages by finding total number of cards
 	# each page has 100 cards maximum
 	counter = 1
-	htmllink = 'https://fullahead-dm.com' + booster_url + '&sort=n&page='
+	htmllink = f"{booster_url}&sort=n&page="
 	try:
 		result = requests.get(htmllink + str(counter), timeout=5)
 	except requests.exceptions.RequestException as e:
@@ -114,7 +119,7 @@ def get_fullahead_dict_list(booster_url, booster_name):
 		for card_div in card_list:
 			card_url = card_div.find('a').attrs['href']
 			card_title = card_div.find('span', class_='itenName').get_text()
-			price_jpy = card_div.find('span', class_='itemPrice').find('strong').getText()
+			price_jpy = card_div.find('span', class_='itemPrice').find('strong').get_text()
 
 			# get fullahead info of desired cards
 			# キズ格安 = damaged , 宅配便のみ = local courier(mostly non-cards)
