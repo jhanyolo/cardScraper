@@ -73,11 +73,15 @@ def get_fullahead_booster_url(booster_name):
 	strainer = SoupStrainer('div', class_='categoryBox')
 	soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
 
+	# add in alternative booster names as Fullahead may defer from the standard booster name
+	# e.g. FA = 'dmrp-012', standard = 'dmrp-12'
+	booster_name = [booster_name, booster_name.replace('-', '-0')]
+
 	# check if card sets in FA sidebar
 	booster_list = soup.find_all('a')
 	for i in booster_list:
 		# return link if booster exists
-		if i.get_text() == booster_name:
+		if i.get_text() in booster_name:
 			booster_url = i.attrs['href']
 
 			# some urls are incomplete
@@ -371,7 +375,7 @@ def write_error_files(booster_name):
 def main():
 	add_headers_to_urllib()
 	booster_name = input('Enter booster pack name (eg. dmrp-10) or press q to quit: ').upper()
-	while(booster_name != 'q'):
+	while(booster_name != 'Q'):
 		dmwiki_link = get_dmwiki_booster_url(booster_name)
 		if dmwiki_link:
 			dmwiki_dict_list = get_dmwiki_dict_list(dmwiki_link)
