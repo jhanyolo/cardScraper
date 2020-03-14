@@ -50,11 +50,15 @@ def get_dmwiki_dict_list(dmwiki_link):
 	dmwiki_dict_list = []
 	for i in card_list:
 		dmwiki_card = {	'code': '',
+						'max_code': '',
 						'english_name': ''}
 
 		# replace unicode nbsp(\xa0) with space, and split to get card code
 		dmwiki_card['code'] = i.getText().replace('\xa0', ' ').split(' ')[0]
-		dmwiki_card['code'] = dmwiki_card['code'].split('/')[0].upper()
+
+		card_full_code = dmwiki_card['code'].split('/')
+		dmwiki_card['code'] = card_full_code[0].upper()
+		dmwiki_card['max_code'] = card_full_code[1].upper()
 
 		dmwiki_card['english_name'] = i.find('a')['title']
 		dmwiki_dict_list.append(dmwiki_card)
@@ -203,7 +207,7 @@ def get_fullahead_dict(card_url, card_title, booster_name, price_jpy):
 
 	fullahead_dict['jap_name'] = jap_name
 
-	# get FA handle name and price from individual card page
+	# get FA handle name and image from individual card page
 	try:
 		result = requests.get('https://fullahead-dm.com' + card_url, timeout=5)
 	except requests.exceptions.RequestException as e:
@@ -263,7 +267,7 @@ def load_data(dmwiki_dict_list, fullahead_dict_list, booster_name):
 def get_product_dict(full_dict, dmwiki_dict, booster_name):
 	product_dict = {}
 	product_dict['Handle'] = full_dict['handle'] + CONST_CARD_RANK
-	product_dict['Title'] = get_title(full_dict, dmwiki_dict['english_name'], booster_name)
+	product_dict['Title'] = get_title(full_dict, dmwiki_dict, booster_name)
 	product_dict['Body (HTML)'] = '<p>Title: {0} [{1}]</p><p>Game: Duel Masters</p><p>Condition: Rank A - Mint / near mint condition, no visible damage, bent, or crease but may have few white spots on edges</p>'.format(dmwiki_dict['english_name'], full_dict['jap_name'])
 	product_dict['Vendor'] = 'Cardboard Collectible'
 	product_dict['Tags'] = booster_name.split('-', 1)[0] + ', ' + booster_name + ', Duel Masters'
@@ -285,10 +289,10 @@ def get_product_dict(full_dict, dmwiki_dict, booster_name):
 
 
 # format card_title to be used in get_product_title
-def get_title(full_dict, english_name, booster_name):
+def get_title(full_dict, dmwiki_dict, booster_name):
 	# format card_title
 	# add booster name(dmrp10), card serial num(g1/g7) and english name sequentially
-	card_title = 'Duel Masters - {0}/{1} {2}'.format(booster_name.upper(), full_dict['code'], english_name)
+	card_title = 'Duel Masters - {0} {1}/{2} {3}'.format(booster_name.upper(), dmwiki_dict['code'], dmwiki_dict['max_code'], dmwiki_dict['english_name'])
 
 	# adds (secret) to secret cards and card rank to all cards
 	if full_dict['rarity'] in CONST_FULLAHEAD_SECRET:
