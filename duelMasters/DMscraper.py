@@ -4,10 +4,9 @@ import os.path
 from bs4 import BeautifulSoup, SoupStrainer
 import requests
 
+from general.constants import *
 
-CONST_EXCHANGE_RATE = 80  # SGD/JPY
-CONST_CARD_RANK = 'a'
-CONST_FULLAHEAD_SECRET = ['秘', 'SS']
+
 image_error_list = []
 unloaded_cards_error_list = []
 
@@ -306,7 +305,7 @@ def get_title(full_dict, dmwiki_dict, booster_name):
 # save data as csv
 def save_data(booster_name, data_list):
 	filepath = booster_name + '.csv'
-	fieldnames = ['Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Option3 Name', 'Option3 Value', 'Variant SKU', 'Variant Grams', 'Variant Inventory Tracker', 'Variant Inventory Policy', 'Variant Fulfillment Service', 'Variant Price', 'Variant Compare At Price', 'Variant Requires Shipping', 'Variant Taxable', 'Variant Barcode', 'Image Src', 'Image Position', 'Image Alt Text', 'Gift Card', 'SEO Title', 'SEO Description', 'Google Shopping / Google Product Category', 'Google Shopping / Gender', 'Google Shopping / Age Group', 'Google Shopping / MPN', 'Google Shopping / AdWords Grouping', 'Google Shopping / AdWords Labels', 'Google Shopping / Condition', 'Google Shopping / Custom Product', 'Google Shopping / Custom Label 0', 'Google Shopping / Custom Label 1', 'Google Shopping / Custom Label 2', 'Google Shopping / Custom Label 3', 'Google Shopping / Custom Label 4', 'Variant Image', 'Variant Weight Unit', 'Variant Tax Code', 'Cost per item']
+	
 	with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -378,6 +377,9 @@ def write_error_files(booster_name):
 
 def main():
 	add_headers_to_urllib()
+	print("=" * 21)
+	print("Duel Masters Scraper")
+	print("=" * 21)
 	booster_name = input('Enter booster pack name (eg. dmrp-10) or press q to quit: ').upper()
 	while(booster_name != 'Q'):
 		dmwiki_link = get_dmwiki_booster_url(booster_name)
@@ -394,7 +396,7 @@ def main():
 				write_error_files(booster_name)
 			else:
 				print('Booster not found on Fullahead')
-				print('Ending program...')
+				print('Exiting system...')
 				print()
 			break
 		else:
