@@ -243,15 +243,15 @@ def save_updated_csvfile(dm_data_list: list, bs_data_list: list, zx_data_list: l
 
 
 def get_user_filepath_input() -> Union[str, bool]:
-    filepath = input('Enter csv file (filename.csv) to be updated (q to quit): ')
-    filepath = os.path.expanduser(f"~/Desktop/{filepath}")
+    userinput = input('Enter csv file (filename.csv) to be updated (q to quit): ')
+    filepath = os.path.expanduser(f"~/Desktop/{userinput}")
     while not os.path.isfile(filepath):
-        if filepath == 'q':
+        if userinput == 'q':
             return False
         print('File entered does not exist. Please try again')
         print()
-        filepath = input('Enter csv file (filename.csv) to be updated (q to quit): ')
-        filepath = os.path.expanduser(f"~/Desktop/{filepath}")
+        userinput = input('Enter csv file (filename.csv) to be updated (q to quit): ')
+        filepath = os.path.expanduser(f"~/Desktop/{userinput}")
     print()
     return filepath
 
