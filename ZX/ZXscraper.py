@@ -6,7 +6,8 @@ from tqdm import tqdm
 import os.path
 import csv
 import time
-import general.constants
+
+from general.constants import *
 
 image_error_list= []
 
@@ -91,6 +92,7 @@ def get_yuyutei_dict_list(booster_prefix: str) -> list:
     try:
         print('Loading information from Yuyu-tei')
         htmlLink = f"https://yuyu-tei.jp/game_zx/sell/sell_price.php?ver={booster_prefix}"
+        print(htmlLink)
         result = requests.get(htmlLink, timeout=5)
         strainer = SoupStrainer('ul', class_='card_list')
         soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
@@ -100,11 +102,16 @@ def get_yuyutei_dict_list(booster_prefix: str) -> list:
         cards_li_list = soup.find_all('li')
         counter=1
         for i in tqdm(cards_li_list):
-            yyt_dict = {'code': '',
+            yyt_dict = {'handle': '',
+                        'code': '',
                         'jap_name': '',
                         'rarity': '',
                         'image_link': '',
                         'price': ''}
+            # get unique handle                        
+            ver = i.find('input', {'name':'item[ver]'})['value']
+            cid = i.find('input', {'name':'item[cid]'})['value']
+            yyt_dict['handle'] = f'{ver}-{cid}'
 
             yyt_dict['code'] = i.find('p', class_='id').get_text().strip().lower()
             yyt_dict['jap_name'] = i.find('p', class_='name').get_text().strip()
@@ -243,25 +250,20 @@ def get_product_dict(yyt_dict: dict, zx_wiki_dict: dict, booster_prefix: str) ->
 
     # hacky check if there's a logic error for holo and secret checks
     if holo_check and secret_check == True:
-        print('card is both holo and secret (Needs debugging)')
+        print('card has both holo and secret in japanese name (Needs debugging)')
 
     # format handle based on holo, enjoy frame,secret and normal cards
-    handle_substr = ''
     title_substr = ''
-
     if holo_check:
         if eframe_check:
-            handle_substr = CONST_ENJOY_FRAME
             title_substr = '(Enjoy Frame) '
         else:
-            handle_substr = CONST_HOLO
             title_substr = '(Holo) '
     elif secret_check:
-        handle_substr = CONST_SECRET
         title_substr = '(Secret) '
 
-    product_dict['Handle'] = f"{yyt_dict['code']}{handle_substr}{CONST_CARD_RANK}"
-    product_dict['Title'] = f"Z/X - {zx_wiki_dict['english_name']} {title_substr}[Rank:A]"
+    product_dict['Handle'] = f"{yyt_dict['handle']}{CONST_CARD_RANK}"
+    product_dict['Title'] = f"Z/X - {yyt_dict['code']} {zx_wiki_dict['english_name']} {title_substr}[Rank:A]"
     product_dict['Body (HTML)'] = '<p>Title: ' + zx_wiki_dict['english_name'] + ' [' + yyt_dict['jap_name'] + ']</p> <p>Game: Z/X</p> <p>Condition: Rank A - Mint / near mint condition, no visible damage, bent, or crease but may have few white spots on edges</p>'
     product_dict['Vendor'] = 'Cardboard Collectible'
 
@@ -302,14 +304,16 @@ def get_product_dict(yyt_dict: dict, zx_wiki_dict: dict, booster_prefix: str) ->
 def make_directory(booster_prefix: str) -> None:
     try:
         # Create target Directory
-        os.mkdir(booster_prefix)
+        dirpath = os.path.expanduser(f"~/Desktop/{booster_prefix}")
+        os.mkdir(dirpath)
     except FileExistsError:
         print("Directory ", booster_prefix, " already exists")
 
 
 # save data as csv
 def save_data(booster_prefix, product_dict_list):
-    filepath = booster_prefix + '.csv'
+    filepath = os.path.expanduser(f"~/Desktop/{booster_prefix}.csv")
+
     with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -325,7 +329,7 @@ def download_images(yyt_dict_list: list, booster_prefix: str) -> None:
     print('Downloading Images...')
 
     cardpage_counter = 1
-
+    filepath = os.path.expanduser(f"~/Desktop/{booster_prefix}")
     for i in tqdm(yyt_dict_list):
         try:
             if len(str(cardpage_counter)) == 1:
@@ -335,7 +339,8 @@ def download_images(yyt_dict_list: list, booster_prefix: str) -> None:
             else:
                 imgName = cardpage_counter
 
-            urllib.request.urlretrieve(i['image_link'], f"{booster_prefix}/{imgName}.jpg")            
+            img_filepath = os.path.expanduser(f"~/Desktop/{booster_prefix}/{imgName}.jpg")
+            urllib.request.urlretrieve(i['image_link'], img_filepath)
             cardpage_counter += 1
         # stores the card code of cards that were not downloaded in image_error_list
         except ValueError:

@@ -1,6 +1,6 @@
 import duelMasters.DMscraper as dm
 import battleSpirits.BSscraper as bs
-import battleSpirits.BSscraper as zx
+import ZX.ZXscraper as zx
 import priceUpdater.priceUpdater as pu
 import sys
 

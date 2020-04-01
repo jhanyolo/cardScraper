@@ -6,7 +6,7 @@ import time
 from bs4 import BeautifulSoup, SoupStrainer
 from typing import Union
 
-import general.constants
+from general.constants import *
 
 dm_error_list = []
 bs_error_list = []
@@ -171,45 +171,31 @@ def get_bigweb_bs_price(handle_name: str) -> Union[int, bool]:
 # FOR ZX
 # get JPY price from Yuyu-tei using product handle and convert to SGD
 def get_yyt_zx_price(handle_name: str) -> Union[int, bool]:
-    # search bigweb
     try:
-        handle_name = handle_name[:-1]  # remove trailing card rank
+                # remove trailing card rank and split into 'ver' and 'cid'
+        handle_name_split = handle_name[:-1].split('-', 1)
+        ver = handle_name_split[0]
+        cid = handle_name_split[1]
 
-        # check if card is special (holo, secret, enjoy frame)
-        # secret is under same rarity as holo
-        is_special = False
-        if handle_name[-1] in [CONST_HOLO, CONST_SECRET, CONST_ENJOY_FRAME]:
-            is_special = True
-            handle_name = handle_name[:-1]
-
-        htmlLink = f"https://yuyu-tei.jp/game_zx/sell/sell_price.php?name={handle_name}&rare=&type=&kizu=0"
+        htmlLink = f"https://yuyu-tei.jp/game_zx/carddetail/cardpreview.php?VER={ver}&CID={cid}&MODE=sell"
         result = requests.get(htmlLink, timeout=5)
         time.sleep(1)
 
         # parse search page using strainer and soup
-        strainer = SoupStrainer('ul', class_='card_list')
+        strainer = SoupStrainer('div', id='main')
         soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
-        product_list = soup.find_all('li')
-        
-        price = False
-        # return price if card has 1,2 or 3 cards returned from search
-        if len(product_list) in [1, 2, 3]:
-            for p in product_list:
-                rarity = p['class'][1].rsplit('rarity_', 1)[1].lower()
-                holo_enjoyframe_check = rarity[-1].lower() == 'h'
 
-                # holo cards will be grouped together
-                if is_special == holo_enjoyframe_check:
-                    jap_price = p.find('p', class_='price').get_text().strip()
+        # get jap_price
+        jap_price = soup.find('p', class_='price').get_text().strip()
+        yen_counter = jap_price.count('円')
 
-                    # get jap_price
-                    yen_counter = jap_price.count('円')
-                    if yen_counter == 2:
-                        # contains 2 '円' as its on sale (has original price & discounted price)
-                        jap_price = jap_price.split('円')[0]
+        # cards that contains 2 '円' is on sale (has original price & discounted price)
+        if yen_counter == 2:
+            jap_price = jap_price.split('円')[0]
 
-                    jap_price = jap_price.replace('円', '')
-                    price = convert_yyt_jpy_to_sgd(jap_price, rarity)
+        jap_price = jap_price.replace('円', '')
+        rarity = soup.find('td', colspan=3).get_text().strip().split(' ', 1)[0]
+        price = convert_yyt_jpy_to_sgd(jap_price, rarity)
         return price
     except Exception as e:
         print(e)
@@ -241,7 +227,7 @@ def convert_yyt_jpy_to_sgd(jap_price: str, rarity: str) -> str:
 def save_updated_csvfile(dm_data_list: list, bs_data_list: list, zx_data_list: list) -> None:
     print('Creating new csvfile...')
     
-    updated_filepath = 'updated.csv'
+    updated_filepath = os.path.expanduser("~/Desktop/updated.csv")
     with open(updated_filepath, 'w', encoding='utf-8', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -274,9 +260,10 @@ def get_user_filepath_input() -> Union[str, bool]:
 
 def write_error_text(error_list: list, text_file_name: str) -> None:
     if error_list:
-
-        print('Updating of DM cards is incomplete, creating error txt file...')
-        with open(text_file_name, 'w', encoding='utf-8') as file:
+        tcg_name = error_list.split('_',1)[0].upper()
+        print(f'Updating of {tcg_name} cards is incomplete, creating error txt file...')
+        filepath = os.path.expanduser(f"~/Desktop/{text_file_name}.txt")
+        with open(filepath, 'w', encoding='utf-8') as file:
             for i in dm_error_list:
                 file.write(i + '\n')
             print(text_file_name + ' created!')
@@ -299,9 +286,9 @@ def write_price_diff_csv(price_difference_list: list, csv_file_name: str) -> Non
 
 
 def write_error_files() -> None:
-    write_error_text(dm_error_list, 'DMupdateErrors.txt')
-    write_error_text(bs_error_list, 'BSupdateErrors.txt')
-    write_error_text(dm_error_list, 'ZXupdateErrors.txt')
+    write_error_text(dm_error_list, 'DMupdateErrors')
+    write_error_text(bs_error_list, 'BSupdateErrors')
+    write_error_text(dm_error_list, 'ZXupdateErrors')
     write_price_diff_csv(price_difference_list, 'price_difference_list.csv')
 
 
