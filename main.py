@@ -20,6 +20,7 @@ def mainMenu() -> None:
         userInput = input('Select option (or press q to quit): ')
 
         if userInput in ['1', '2', '3', '4', 'q']:
+            print()
             return userInput
         else:
             print('Invalid input, please enter again\n')

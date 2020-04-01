@@ -92,7 +92,6 @@ def get_yuyutei_dict_list(booster_prefix: str) -> list:
     try:
         print('Loading information from Yuyu-tei')
         htmlLink = f"https://yuyu-tei.jp/game_zx/sell/sell_price.php?ver={booster_prefix}"
-        print(htmlLink)
         result = requests.get(htmlLink, timeout=5)
         strainer = SoupStrainer('ul', class_='card_list')
         soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)

@@ -364,9 +364,7 @@ def get_title(card_handle, english_name):
 # only call this after load_data()
 # save data as csv
 def save_data(booster_name, data_list):
-	fieldnames = ['Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published', 'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value', 'Option3 Name', 'Option3 Value', 'Variant SKU', 'Variant Grams', 'Variant Inventory Tracker', 'Variant Inventory Policy', 'Variant Fulfillment Service', 'Variant Price', 'Variant Compare At Price', 'Variant Requires Shipping', 'Variant Taxable', 'Variant Barcode', 'Image Src', 'Image Position', 'Image Alt Text', 'Gift Card', 'SEO Title', 'SEO Description', 'Google Shopping / Google Product Category', 'Google Shopping / Gender', 'Google Shopping / Age Group', 'Google Shopping / MPN', 'Google Shopping / AdWords Grouping', 'Google Shopping / AdWords Labels', 'Google Shopping / Condition', 'Google Shopping / Custom Product', 'Google Shopping / Custom Label 0', 'Google Shopping / Custom Label 1', 'Google Shopping / Custom Label 2', 'Google Shopping / Custom Label 3', 'Google Shopping / Custom Label 4', 'Variant Image', 'Variant Weight Unit', 'Variant Tax Code', 'Cost per item']
-
-	filepath = booster_name + '.csv'
+	filepath = os.path.expanduser(f"~/Desktop/{booster_name}.csv")
 	with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -381,15 +379,18 @@ def save_data(booster_name, data_list):
 def make_directory(booster_name):
 	try:
 		# Create target Directory
-		os.mkdir(booster_name)
+		dirpath = os.path.expanduser(f"~/Desktop/{booster_name}")
+		os.mkdir(dirpath)
 	except FileExistsError:
 		print("Directory ", booster_name, " already exists")
+
 
 # add User-agent to urlib headers to bypass bot detection
 def add_headers_to_urllib() -> None:
     opener = urllib.request.build_opener()
     opener.addheaders = [('User-agent', 'Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)')]
     urllib.request.install_opener(opener)
+
 
 def download_images(yyt_dict_list: list, booster_prefix: str) -> None:
     print('Downloading Images...')
@@ -404,8 +405,8 @@ def download_images(yyt_dict_list: list, booster_prefix: str) -> None:
                 imgName = '0' + str(cardpage_counter)
             else:
                 imgName = cardpage_counter
-
-            urllib.request.urlretrieve(i['image_link'], f"{booster_prefix}/{imgName}.jpg")            
+            img_filepath = os.path.expanduser(f"~/Desktop/{booster_prefix}/{imgName}.jpg")
+            urllib.request.urlretrieve(i['image_link'], img_filepath)
             cardpage_counter += 1
         # stores the card code of cards that were not downloaded in image_error_list
         except ValueError:
@@ -420,7 +421,8 @@ def write_error_files(booster_name):
 	# output card images that are not downloaded into text file
 	if image_error_list:
 		text_file_name = booster_name + 'imageErrors.txt'
-		with open(text_file_name, 'w') as file:
+		filepath = os.path.expanduser(f"~/Desktop/{text_file_name}")
+		with open(filepath, 'w') as file:
 			for i in image_error_list:
 				file.write(i + '\n')
 			print(text_file_name + ' created!')
@@ -428,7 +430,8 @@ def write_error_files(booster_name):
 	# output cards info that are not added to csv file into text file
 	if unloaded_cards_error_list:
 		text_file_name = booster_name + 'cardErrors.txt'
-		with open(text_file_name, 'w') as file:
+		filepath = os.path.expanduser(f"~/Desktop/{text_file_name}")
+		with open(filepath, 'w') as file:
 			for i in unloaded_cards_error_list:
 				file.write(i['code'] + '\n')
 			print(text_file_name + ' created!')

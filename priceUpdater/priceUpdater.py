@@ -194,7 +194,7 @@ def get_yyt_zx_price(handle_name: str) -> Union[int, bool]:
             jap_price = jap_price.split('円')[0]
 
         jap_price = jap_price.replace('円', '')
-        rarity = soup.find('td', colspan=3).get_text().strip().split(' ', 1)[0]
+        rarity = soup.find('td', colspan=3).get_text().strip().split(' ', 1)[0].lower()
         price = convert_yyt_jpy_to_sgd(jap_price, rarity)
         return price
     except Exception as e:
@@ -239,21 +239,19 @@ def save_updated_csvfile(dm_data_list: list, bs_data_list: list, zx_data_list: l
         for item in zx_data_list:
             writer.writerow(item)
     print()
-    print('CSV file saved!')
+    print('Updated CSV file saved!')
 
 
 def get_user_filepath_input() -> Union[str, bool]:
-    filepath = input('Enter csv file to be updated (q to quit): ')
-    if len(filepath) >= 4 and filepath[-4:] != '.csv':
-        filepath += '.csv'
-    while not os.path.exists(filepath):
+    filepath = input('Enter csv file (filename.csv) to be updated (q to quit): ')
+    filepath = os.path.expanduser(f"~/Desktop/{filepath}")
+    while not os.path.isfile(filepath):
         if filepath == 'q':
             return False
         print('File entered does not exist. Please try again')
         print()
-        filepath = input('Enter csv file to be updated (q to quit): ')
-        if len(filepath) >= 4 and filepath[-4:] != '.csv':
-            filepath += '.csv'
+        filepath = input('Enter csv file (filename.csv) to be updated (q to quit): ')
+        filepath = os.path.expanduser(f"~/Desktop/{filepath}")
     print()
     return filepath
 
@@ -274,7 +272,8 @@ def write_price_diff_csv(price_difference_list: list, csv_file_name: str) -> Non
         fieldnames = ['Handle', 'Title', 'Original Price', 'Updated Price']
 
         print('Generate CSV file for huge price disparities...')
-        with open(csv_file_name, 'w', newline='', encoding='utf-8') as csvfile:
+        filepath = os.path.expanduser(f"~/Desktop/{csv_file_name}")
+        with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
@@ -327,7 +326,7 @@ def update_prices(data_list: list, tcg_name: int, error_list: list) -> None:
                 error_list.append(d['Handle'])
                 unloaded_counter += 1
             print('Retrieving: {0}/{1} (Cards not loaded: {2})'.format(loaded_counter, total, unloaded_counter), end='\r')
-            print('\n')
+        print('\n')
 
 
 def main():
