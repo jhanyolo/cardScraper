@@ -120,8 +120,11 @@ def get_rarity_of_common_or_uncommon(card_name: str, handle_name: str) -> Union[
         booster_name = booster_name[2:]
     card_name_split_list = card_name.upper().split(booster_name)
 
+    if len(card_name_split_list) < 2:
+        return False
+
     rarity = card_name_split_list[1]
-    rarity = rarity.split('/', 3)[2]
+    rarity = rarity.split('/', 3)[2].upper()
 
     if rarity in ['C', 'U']:
         return rarity
