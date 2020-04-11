@@ -258,7 +258,7 @@ def get_user_filepath_input() -> Union[str, bool]:
 
 def write_error_text(error_list: list, text_file_name: str) -> None:
     if error_list:
-        tcg_name = error_list.split('_',1)[0].upper()
+        tcg_name = text_file_name.split('_',1)[0].upper()
         print(f'Updating of {tcg_name} cards is incomplete, creating error txt file...')
         filepath = os.path.expanduser(f"~/Desktop/{text_file_name}.txt")
         with open(filepath, 'w', encoding='utf-8') as file:
@@ -285,9 +285,9 @@ def write_price_diff_csv(price_difference_list: list, csv_file_name: str) -> Non
 
 
 def write_error_files() -> None:
-    write_error_text(dm_error_list, 'DMupdateErrors')
-    write_error_text(bs_error_list, 'BSupdateErrors')
-    write_error_text(dm_error_list, 'ZXupdateErrors')
+    write_error_text(dm_error_list, 'DM_updateErrors')
+    write_error_text(bs_error_list, 'BS_updateErrors')
+    write_error_text(zx_error_list, 'ZX_updateErrors')
     write_price_diff_csv(price_difference_list, 'price_difference_list.csv')
 
 
