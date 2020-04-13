@@ -230,7 +230,7 @@ def convert_yyt_jpy_to_sgd(jap_price: str, rarity: str) -> str:
 def save_updated_csvfile(dm_data_list: list, bs_data_list: list, zx_data_list: list) -> None:
     print('Creating new csvfile...')
     
-    updated_filepath = os.path.expanduser("~/Desktop/updated.csv")
+    updated_filepath = os.path.expanduser("updated.csv")
     with open(updated_filepath, 'w', encoding='utf-8', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -247,14 +247,14 @@ def save_updated_csvfile(dm_data_list: list, bs_data_list: list, zx_data_list: l
 
 def get_user_filepath_input() -> Union[str, bool]:
     userinput = input('Enter csv file (filename.csv) to be updated (q to quit): ')
-    filepath = os.path.expanduser(f"~/Desktop/{userinput}")
+    filepath = os.path.expanduser(f"{userinput}.csv")
     while not os.path.isfile(filepath):
-        if userinput == 'q':
+        if userinput.lower() == 'q':
             return False
         print('File entered does not exist. Please try again')
         print()
         userinput = input('Enter csv file (filename.csv) to be updated (q to quit): ')
-        filepath = os.path.expanduser(f"~/Desktop/{userinput}")
+        filepath = os.path.expanduser(f"{userinput}.csv")
     print()
     return filepath
 
@@ -263,9 +263,9 @@ def write_error_text(error_list: list, text_file_name: str) -> None:
     if error_list:
         tcg_name = text_file_name.split('_',1)[0].upper()
         print(f'Updating of {tcg_name} cards is incomplete, creating error txt file...')
-        filepath = os.path.expanduser(f"~/Desktop/{text_file_name}.txt")
+        filepath = os.path.expanduser(f"{text_file_name}.txt")
         with open(filepath, 'w', encoding='utf-8') as file:
-            for i in dm_error_list:
+            for i in error_list:
                 file.write(i + '\n')
             print(text_file_name + ' created!')
 
@@ -275,7 +275,7 @@ def write_price_diff_csv(price_difference_list: list, csv_file_name: str) -> Non
         fieldnames = ['Handle', 'Title', 'Original Price', 'Updated Price']
 
         print('Generate CSV file for huge price disparities...')
-        filepath = os.path.expanduser(f"~/Desktop/{csv_file_name}")
+        filepath = os.path.expanduser(f"{csv_file_name}.csv")
         with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
@@ -291,7 +291,7 @@ def write_error_files() -> None:
     write_error_text(dm_error_list, 'DM_updateErrors')
     write_error_text(bs_error_list, 'BS_updateErrors')
     write_error_text(zx_error_list, 'ZX_updateErrors')
-    write_price_diff_csv(price_difference_list, 'price_difference_list.csv')
+    write_price_diff_csv(price_difference_list, 'price_difference_list')
 
 
 def update_prices(data_list: list, tcg_name: int, error_list: list) -> None:
