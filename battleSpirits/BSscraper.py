@@ -15,7 +15,7 @@ image_error_list = []
 # checks if booster exists
 def get_bigweb_booster_url(booster_name):
 	try:
-		result = requests.get('http://www.bigweb.co.jp/ver2/battlespirits_index.php', timeout=5)
+		result = requests.get('http://www.bigweb.co.jp/ver2/battlespirits_index.php')
 	except requests.exceptions.RequestException as e:
 		print(e)
 	else:
@@ -39,63 +39,62 @@ def get_bigweb_dict(card_id, jpy_price):
 					'price': '',
 					'reprint_code': ''}
 	try:
-		result = requests.get('http://www.bigweb.co.jp/ver2/pd2.php?card_id=' + card_id, timeout=5)
+		result = requests.get('http://www.bigweb.co.jp/ver2/pd2.php?card_id=' + card_id)
+		soup = BeautifulSoup(result.content, 'lxml')
+
+		#  get card code from the last row
+		rows = soup.find_all('tr')
+		card_code = rows[-1].get_text().split(':')[1].strip()
+
+		# if card is a reprint, code will be in a different format
+		# replace bigweb delimiter (※), '(' and  ')' with underscore (_)
+		# cuurent format = currentSetCode※(originalCode)
+		# e.g. SD47-19※(LM16-03)
+		if CONST_BIGWEB_REPRINT_SEPARATOR in card_code:
+			bigweb_dict['reprint_code'] = card_code.split(CONST_BIGWEB_REPRINT_SEPARATOR)[1]
+			if '(' == bigweb_dict['reprint_code'][0] and ')' == bigweb_dict['reprint_code'][-1]:
+				bigweb_dict['reprint_code'] = bigweb_dict['reprint_code'][1:-1]
+
+			card_code = card_code.replace(CONST_BIGWEB_REPRINT_SEPARATOR, CONST_NEW_REPRINT_SEPARATOR)
+
+		card_code = card_code.replace('(', CONST_NEW_REPRINT_SEPARATOR).replace(')', CONST_NEW_REPRINT_SEPARATOR)
+		bigweb_dict['code'] = card_code.upper()
+
+		# title_html contains jap name ending with delimiter '/' (e.g. 戦国龍皇ジークフリート・魁/)
+		# BSC sets reprinted cards(RPC) contain the original print card code in title_html
+		# together with the jap name (e.g. 戦国龍皇ジークフリート・魁/※BSC30-X01)
+		title_html = soup.find('title').get_text()
+
+		# get the original card code of RPCs from title_html if it exists
+		if CONST_BIGWEB_REPRINT_SEPARATOR in title_html and '予約' not in title_html:
+			if CONST_BIGWEB_REPRINT_SEPARATOR + '(' in title_html:
+				bigweb_dict['reprint_code'] = title_html.split(CONST_BIGWEB_REPRINT_SEPARATOR)[1][1:-1]
+			else:
+				bigweb_dict['reprint_code'] = title_html.split(CONST_BIGWEB_REPRINT_SEPARATOR)[1]
+
+		jap_name = title_html
+		if 'SC】' in title_html:
+			jap_name = title_html.split('】', 1)[1]
+		if '/' in jap_name:
+			jap_name = jap_name.split('/')[0]
+
+		bigweb_dict['jap_name'] = jap_name
+
+		# convert yen to sgd and assign value to dict
+		price = int(jpy_price)
+
+		if price < CONST_EXCHANGE_RATE:
+			price = round(price / CONST_EXCHANGE_RATE, 1)
+		else:
+			price = round(price / CONST_EXCHANGE_RATE)
+
+		bigweb_dict['price'] = price
+
+		bigweb_dict['image_link'] = 'http://www.bigweb.co.jp' + soup.find('img').attrs['src'].split('?')[0]
+
+		return bigweb_dict
 	except requests.exceptions.RequestException as e:
 		print(e)
-
-	soup = BeautifulSoup(result.content, 'lxml')
-
-	#  get card code from the last row
-	rows = soup.find_all('tr')
-	card_code = rows[-1].get_text().split(':')[1].strip()
-
-	# if card is a reprint, code will be in a different format
-	# replace bigweb delimiter (※), '(' and  ')' with underscore (_)
-	# cuurent format = currentSetCode※(originalCode)
-	# e.g. SD47-19※(LM16-03)
-	if CONST_BIGWEB_REPRINT_SEPARATOR in card_code:
-		bigweb_dict['reprint_code'] = card_code.split(CONST_BIGWEB_REPRINT_SEPARATOR)[1]
-		if '(' == bigweb_dict['reprint_code'][0] and ')' == bigweb_dict['reprint_code'][-1]:
-			bigweb_dict['reprint_code'] = bigweb_dict['reprint_code'][1:-1]
-
-		card_code = card_code.replace(CONST_BIGWEB_REPRINT_SEPARATOR, CONST_NEW_REPRINT_SEPARATOR)
-
-	card_code = card_code.replace('(', CONST_NEW_REPRINT_SEPARATOR).replace(')', CONST_NEW_REPRINT_SEPARATOR)
-	bigweb_dict['code'] = card_code.upper()
-
-	# title_html contains jap name ending with delimiter '/' (e.g. 戦国龍皇ジークフリート・魁/)
-	# BSC sets reprinted cards(RPC) contain the original print card code in title_html
-	# together with the jap name (e.g. 戦国龍皇ジークフリート・魁/※BSC30-X01)
-	title_html = soup.find('title').get_text()
-
-	# get the original card code of RPCs from title_html if it exists
-	if CONST_BIGWEB_REPRINT_SEPARATOR in title_html and '予約' not in title_html:
-		if CONST_BIGWEB_REPRINT_SEPARATOR + '(' in title_html:
-			bigweb_dict['reprint_code'] = title_html.split(CONST_BIGWEB_REPRINT_SEPARATOR)[1][1:-1]
-		else:
-			bigweb_dict['reprint_code'] = title_html.split(CONST_BIGWEB_REPRINT_SEPARATOR)[1]
-
-	jap_name = title_html
-	if 'SC】' in title_html:
-		jap_name = title_html.split('】', 1)[1]
-	if '/' in jap_name:
-		jap_name = jap_name.split('/')[0]
-
-	bigweb_dict['jap_name'] = jap_name
-
-	# convert yen to sgd and assign value to dict
-	price = int(jpy_price)
-
-	if price < CONST_EXCHANGE_RATE:
-		price = round(price / CONST_EXCHANGE_RATE, 1)
-	else:
-		price = round(price / CONST_EXCHANGE_RATE)
-
-	bigweb_dict['price'] = price
-
-	bigweb_dict['image_link'] = 'http://www.bigweb.co.jp' + soup.find('img').attrs['src'].split('?')[0]
-
-	return bigweb_dict
 
 
 # retrieve card code, jap_name, imagelink and price
@@ -108,7 +107,7 @@ def get_bigweb_dict_list(bigweb_booster_url):
 
 	# get total page number and beautifulSoup with card information
 	try:
-		result = requests.get(bigweb_booster_url, timeout=5)
+		result = requests.get(bigweb_booster_url)
 	except requests.exceptions.RequestException as e:
 		print(e)
 	strainer = SoupStrainer('div', class_='pickup')
@@ -119,7 +118,7 @@ def get_bigweb_dict_list(bigweb_booster_url):
 	while page_counter != total_pages:
 		if page_counter != 0:
 			bigweb_booster_url = bigweb_booster_url[:-1] + str(page_counter)
-			result = requests.get(bigweb_booster_url, timeout=5)
+			result = requests.get(bigweb_booster_url)
 		strainer = SoupStrainer('div', class_=['watermat abc', 'watermat abcd'])
 		soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
 
@@ -132,10 +131,12 @@ def get_bigweb_dict_list(bigweb_booster_url):
 
 			# get price (not found in individual product page
 			jpy_price = product.find('span').get_text()[:-1]
-
 			bigweb_dict = get_bigweb_dict(card_id, jpy_price)
-			bigweb_dict_list.append(bigweb_dict)
-			card_counter += 1
+
+			# having a '-' confirms that it is a card
+			if '-' in bigweb_dict['code']:
+				bigweb_dict_list.append(bigweb_dict)
+				card_counter += 1
 			print('Loading: {0}'.format(card_counter), end='\r')
 
 		page_counter += 1
@@ -449,7 +450,7 @@ def main():
 			# retrieve info from bigweb, BS wiki and FullAhead
 			bigweb_dict_list = get_bigweb_dict_list(bigweb_booster_url)
 			bswiki_dict_list = get_bswiki_dict_list(booster_name)
-
+			
 			# get all possible parallel cards from FullAhead using 3 different searchfields as naming convention is different for different sets
 			# 1:【パラレル】BS44
 			# 2:【SECRET】【BS44
