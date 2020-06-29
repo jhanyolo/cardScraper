@@ -60,13 +60,13 @@ def get_fullahead_dm_price(handle_name: str) -> Union[int, bool]:
     # search fullahead
     try:
         handle_name = handle_name[:-1]  # remove trailing card rank
-        htmlLink = 'https://fullahead-dm.com/?mode=srh&cid=&keyword=' + handle_name
+        htmlLink = f'https://fullahead-dm.com/shop/shopbrand.html?&search={handle_name}'
         result = requests.get(htmlLink, timeout=5)
 
         # parse search page using strainer and soup
-        strainer = SoupStrainer('div', class_='indexItemBox')
+        strainer = SoupStrainer('div', class_='indexItemBox cf')
         soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
-        items_div = soup.find('div', class_='indexItemBox')
+        items_div = soup.find('div', class_='indexItemBox cf')
 
         items_list = items_div.find_all('div')
 
@@ -74,7 +74,7 @@ def get_fullahead_dm_price(handle_name: str) -> Union[int, bool]:
         # return False if >1 product is returned in searched product
         if len(items_list) == 1:
             pricejpy_fullahead_text = items_list[0].find('span', class_='itemPrice').find('strong').get_text()
-            card_name = items_list[0].find('span', class_='itenName').get_text()
+            card_name = items_list[0].find('span', class_='itemName').get_text()
             price = convert_fullahead_price(pricejpy_fullahead_text, card_name, handle_name)
             return price
         else:
@@ -248,6 +248,7 @@ def save_updated_csvfile(dm_data_list: list, bs_data_list: list, zx_data_list: l
 def get_user_filepath_input() -> Union[str, bool]:
     userinput = input('Enter csv file (filename.csv) to be updated (q to quit): ')
     filepath = os.path.expanduser(f"{userinput}.csv")
+
     while not os.path.isfile(filepath):
         if userinput.lower() == 'q':
             return False

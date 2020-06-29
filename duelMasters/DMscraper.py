@@ -67,77 +67,53 @@ def get_dmwiki_dict_list(dmwiki_link):
     return dmwiki_dict_list
 
 
-# return booster url based on user input (if it exists)
-def get_fullahead_booster_url(booster_name):
-    try:
-        result = requests.get('https://fullahead-dm.com/?mode=srh&cid=&keyword=', timeout=5)
-    except requests.exceptions.RequestException as e:
-        print(e)
-    strainer = SoupStrainer('div', class_='categoryBox')
-    soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
-
-    # add in alternative booster names as Fullahead may defer from the standard booster name
-    # e.g. FA = 'dmrp-012', standard = 'dmrp-12'
-    booster_name = [booster_name, booster_name.replace('-', '-0')]
-
-    # check if card sets in FA sidebar
-    booster_list = soup.find_all('a')
-    for i in booster_list:
-        # return link if booster exists
-        if i.get_text() in booster_name:
-            booster_url = i.attrs['href']
-
-            # some urls are incomplete
-            if 'https://fullahead-dm.com' not in booster_url:
-                booster_url = 'https://fullahead-dm.com' + booster_url
-            return booster_url
-    return False
-
-
 # retrieve card code, jap_name, imagelink
-def get_fullahead_dict_list(booster_url, booster_name):
+def get_fullahead_dict_list(booster_name):
     print('Retrieving products from Fullahead...')
 
     # get total number of pages by finding total number of cards
     # each page has 100 cards maximum
+    cards_per_page = 50
     counter = 1
-    htmllink = f"{booster_url}&sort=n&page="
     try:
-        result = requests.get(htmllink + str(counter), timeout=5)
+        htmllink = f"https://fullahead-dm.com/shopbrand/{booster_name.replace('-', '')}/page{counter}/recommend/"
+        result = requests.get(htmllink, timeout=5)
+        strainer = SoupStrainer('span', class_='pagerTxt')
+        soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
+        total_items = int(soup.find('strong').get_text()[1:-1])
+        pages = total_items // cards_per_page + 1
+
+        fullahead_dict_list = []
+
+        # load all cards returned from the search
+        card_counter = 0
+        while counter != pages + 1:
+            if counter != 1:
+                htmllink = f"https://fullahead-dm.com/shopbrand/{booster_name.replace('-', '')}/page{counter}/recommend/"
+                result = requests.get(htmllink, timeout=5)
+
+            soup = BeautifulSoup(result.content, 'lxml')
+            card_list = soup.find('div', class_='indexItemBox').find_all('div')
+            del card_list[1::2]
+
+            # get necessary card info in fullahead_dict and add to list
+            for card_div in card_list:
+                card_url = card_div.find('a').attrs['href']
+                card_title = card_div.find('span', class_='itemName').get_text()
+                price_jpy = card_div.find('span', class_='itemPrice').find('strong').get_text()
+
+                # get fullahead info of desired cards
+                # キズ格安 = damaged , 宅配便のみ = local courier(mostly non-cards)
+                if 'キズ格安' not in card_title and '宅配便のみ' not in card_title:
+                    fullahead_dict = get_fullahead_dict(card_url, card_title, booster_name, price_jpy)
+                    fullahead_dict_list.append(fullahead_dict)
+                    card_counter += 1
+                    print('Loading: {0}/{1}'.format(card_counter, total_items), end='\r')
+            counter += 1
+
+        return fullahead_dict_list
     except requests.exceptions.RequestException as e:
         print(e)
-    strainer = SoupStrainer('span', class_='pagerTxt')
-    soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
-
-    total_items = int(soup.find('strong').get_text()[1:-1])
-    pages = total_items // 101 + 1
-    fullahead_dict_list = []
-
-    # load all cards returned from the search
-    card_counter = 0
-    while counter != pages + 1:
-        if counter != 1:
-            result = requests.get(htmllink + str(counter), timeout=5)
-
-        soup = BeautifulSoup(result.content, 'lxml')
-        card_list = soup.find('div', class_='indexItemBox').find_all('div')
-
-        # get necessary card info in fullahead_dict and add to list
-        for card_div in card_list:
-            card_url = card_div.find('a').attrs['href']
-            card_title = card_div.find('span', class_='itenName').get_text()
-            price_jpy = card_div.find('span', class_='itemPrice').find('strong').get_text()
-
-            # get fullahead info of desired cards
-            # キズ格安 = damaged , 宅配便のみ = local courier(mostly non-cards)
-            if 'キズ格安' not in card_title and '宅配便のみ' not in card_title:
-                fullahead_dict = get_fullahead_dict(card_url, card_title, booster_name, price_jpy)
-                fullahead_dict_list.append(fullahead_dict)
-                card_counter += 1
-                print('Loading: {0}/{1}'.format(card_counter, total_items), end='\r')
-        counter += 1
-
-    return fullahead_dict_list
 
 
 def get_fullahead_dict(card_url, card_title, booster_name, price_jpy):
@@ -209,20 +185,19 @@ def get_fullahead_dict(card_url, card_title, booster_name, price_jpy):
     # get FA handle name and image from individual card page
     try:
         result = requests.get('https://fullahead-dm.com' + card_url, timeout=5)
+        strainer = SoupStrainer('div', class_='product_detail_area cf')
+        soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
+        # get image
+        image_list = soup.find_all('img')
+        fullahead_dict['image_link'] = image_list[0].attrs['src']
+
+        # get handle name
+        card_table_details = soup.find_all('td')
+        fullahead_dict['handle'] = card_table_details[0].get_text()
+
+        return fullahead_dict
     except requests.exceptions.RequestException as e:
         print(e)
-    strainer = SoupStrainer('div', class_='product_detail_area cf')
-    soup = BeautifulSoup(result.content, 'lxml', parse_only=strainer)
-
-    # get image
-    image_list = soup.find_all('img', class_={'zoom-tiny-image'})
-    fullahead_dict['image_link'] = image_list[0].attrs['src']
-
-    # get handle name
-    card_table_details = soup.find_all('td')
-    fullahead_dict['handle'] = card_table_details[0].get_text()
-
-    return fullahead_dict
 
 
 # check if can be encoded with ASCII, which are Latin alphabet and some other characters
@@ -389,19 +364,12 @@ def main():
         dmwiki_link = get_dmwiki_booster_url(booster_name)
         if dmwiki_link:
             dmwiki_dict_list = get_dmwiki_dict_list(dmwiki_link)
-            fa_booster_url = get_fullahead_booster_url(booster_name)
-
-            if fa_booster_url:
-                fullahead_dict_list = get_fullahead_dict_list(fa_booster_url, booster_name)
-                data_list = load_data(dmwiki_dict_list, fullahead_dict_list, booster_name)
-                save_data(booster_name, data_list)
-                make_directory(booster_name)
-                download_images(fullahead_dict_list, booster_name)
-                write_error_files(booster_name)
-            else:
-                print('Booster not found on Fullahead')
-                print('Exiting system...')
-                print()
+            fullahead_dict_list = get_fullahead_dict_list(booster_name)
+            data_list = load_data(dmwiki_dict_list, fullahead_dict_list, booster_name)
+            save_data(booster_name, data_list)
+            make_directory(booster_name)
+            download_images(fullahead_dict_list, booster_name)
+            write_error_files(booster_name)
             break
         else:
             print(booster_name + " cannot be found.")
@@ -411,4 +379,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
+    fa_booster_url = f"https://fullahead-dm.com/shopbrand/dmrp10"
+    fullahead_dict_list = get_fullahead_dict_list(fa_booster_url, booster_name)
+
